@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="split">
+  <div>
+    <h1>Welcome back, {{ g.user.full_name.split()[0] }}</h1>
+    <p class="lede">
+      {% if role == 'Admin' %}Platform-wide health of the rescue network.
+      {% elif role == 'Donor Staff' %}Your surplus batches and their journey into the network.
+      {% elif role == 'Recipient Coordinator' %}Claims, deliveries and food available to your kitchen.
+      {% else %}Your upcoming routes and volunteer hours.{% endif %}
+    </p>
+  </div>
+  {% if role == 'Recipient Coordinator' %}
+    <a class="btn" href="{{ url_for('transaction') }}">Dispatch a batch →</a>
+  {% elif role == 'Donor Staff' %}
+    <a class="btn" href="{{ url_for('batch_new') }}">Publish a batch →</a>
+  {% endif %}
+</div>
+
+{% if role == 'Admin' %}
+<div class="grid cards">
+  <div class="card kpi"><span class="label">Total batches</span><span class="value">{{ kpis.batches | num }}</span><span class="sub">{{ kpis.available | num }} available now</span></div>
+  <div class="card kpi"><span class="label">Rescued</span><span class="value">{{ kpis.rescued_kg | kg }}<small> kg</small></span><span class="sub">{{ kpis.delivered | num }} handovers completed</span></div>
+  <div class="card kpi"><span class="label">At risk (48 h)</span><span class="value">{{ network.at_risk | num }}</span><span class="sub">available, expiring soon</span></div>
+  <div class="card kpi"><span class="label">Cold-chain failures</span><span class="value">{{ network.cold_fails | num }}</span><span class="sub">last 7 days</span></div>
+  <div class="card kpi"><span class="label">Partners</span><span class="value">{{ network.donors }}<small> / {{ network.recipients }}</small></span><span class="sub">donors / recipients</span></div>
+</div>
+
+<h2>Recent activity</h2>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>When</th><th>Actor</th><th>Role</th><th>Action</th><th>Entity</th><th class="num">Ref</th></tr></thead>
+    <tbody>
+    {% for row in recent_audit %}
+      <tr>
+        <td class="nowrap">{{ row.created_at | dt }}</td>
+        <td>{{ row.full_name or 'system' }}</td>
+        <td class="muted">{{ row.role_name or '-' }}</td>
+        <td><code>{{ row.action }}</code></td>
+        <td class="muted">{{ row.entity }}</td>
+        <td class="num">#{{ row.entity_id }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif role == 'Donor Staff' %}
+<div class="grid cards">
+  <div class="card kpi"><span class="label">Your batches</span><span class="value">{{ kpis.batches | num }}</span><span class="sub">{{ kpis.available | num }} still available</span></div>
+  <div class="card kpi"><span class="label">Rescued</span><span class="value">{{ kpis.rescued_kg | kg }}<small> kg</small></span><span class="sub">claimed or delivered</span></div>
+  <div class="card kpi"><span class="label">Spoiled</span><span class="value">{{ kpis.spoiled | num }}</span><span class="sub">batches lost</span></div>
+  <div class="card kpi"><span class="label">Org</span><span class="value" style="font-size:17px;">{{ g.user.org_name }}</span><span class="sub">donor partner</span></div>
+</div>
+
+<h2>Expiring first</h2>
+<div class="card table-wrap">
+  {% if expiring %}
+  <table>
+    <thead><tr><th>Batch</th><th>Item</th><th>Category</th><th class="num">Remaining</th><th>Expires</th><th></th></tr></thead>
+    <tbody>
+    {% for b in expiring %}
+      <tr>
+        <td>#{{ b.batch_id }}</td>
+        <td>{{ b.item_description }}</td>
+        <td class="muted">{{ b.category_name }}</td>
+        <td class="num">{{ b.remaining_kg | kg }} kg</td>
+        <td class="nowrap">{{ b.expires_at | dt }}</td>
+        <td class="right"><a class="btn ghost small" href="{{ url_for('batch_edit', batch_id=b.batch_id) }}">Edit</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">Nothing available right now. Publish a batch to get started.</p>{% endif %}
+</div>
+
+<h2>Latest claims on your food</h2>
+<div class="card table-wrap">
+  {% if recent_claims %}
+  <table>
+    <thead><tr><th>Item</th><th>Recipient</th><th class="num">kg</th><th>Status</th><th>Claimed</th></tr></thead>
+    <tbody>
+    {% for c in recent_claims %}
+      <tr>
+        <td>{{ c.item_description }}</td>
+        <td>{{ c.recipient }}</td>
+        <td class="num">{{ c.allocated_kg | kg }}</td>
+        <td><span class="badge {{ c.status }}">{{ c.status.replace('_', ' ') }}</span></td>
+        <td class="nowrap">{{ c.allocated_at | dt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">No claims yet.</p>{% endif %}
+</div>
+
+{% elif role == 'Recipient Coordinator' %}
+<div class="grid cards">
+  <div class="card kpi"><span class="label">Claimable now</span><span class="value">{{ kpis.claimable | num }}</span><span class="sub">matching your storage rules</span></div>
+  <div class="card kpi"><span class="label">Open claims</span><span class="value">{{ kpis.open_claims | num }}</span><span class="sub">awaiting handover</span></div>
+  <div class="card kpi"><span class="label">Received</span><span class="value">{{ kpis.received_kg | kg }}<small> kg</small></span><span class="sub">lifetime, signed handovers</span></div>
+  <div class="card kpi"><span class="label">Runs led</span><span class="value">{{ kpis.my_runs | num }}</span><span class="sub">as coordinator</span></div>
+</div>
+
+<h2>Your recent claims</h2>
+<div class="card table-wrap">
+  {% if claims %}
+  <table>
+    <thead><tr><th>Batch</th><th>Item</th><th>Donor</th><th class="num">kg</th><th>Allocation</th><th>Batch</th><th>Claimed</th></tr></thead>
+    <tbody>
+    {% for c in claims %}
+      <tr>
+        <td>#{{ c.batch_id }}</td>
+        <td>{{ c.item_description }}<br><span class="small muted">{{ c.category }}</span></td>
+        <td>{{ c.donor }}</td>
+        <td class="num">{{ c.allocated_kg | kg }}</td>
+        <td><span class="badge {{ c.status }}">{{ c.status.replace('_', ' ') }}</span></td>
+        <td><span class="badge {{ c.batch_status }}">{{ c.batch_status }}</span></td>
+        <td class="nowrap">{{ c.allocated_at | dt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">No claims yet — browse <a href="{{ url_for('claims') }}">claimable food</a>.</p>{% endif %}
+</div>
+
+{% else %}
+<div class="grid cards">
+  <div class="card kpi"><span class="label">Upcoming shifts</span><span class="value">{{ kpis.upcoming | num }}</span><span class="sub">planned or in progress</span></div>
+  <div class="card kpi"><span class="label">This month</span><span class="value">{{ kpis.hours_this_month | kg }}<small> h</small></span><span class="sub">logged hours</span></div>
+  <div class="card kpi"><span class="label">Completed</span><span class="value">{{ kpis.completed_runs | num }}</span><span class="sub">runs delivered</span></div>
+</div>
+
+<h2>Your next routes</h2>
+<div class="card table-wrap">
+  {% if shifts %}
+  <table>
+    <thead><tr><th>Run</th><th>Date</th><th>Vehicle</th><th>Crew role</th><th class="num">Hours</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in shifts %}
+      <tr>
+        <td><a href="{{ url_for('run_detail', run_id=s.run_id) }}">#{{ s.run_id }}</a></td>
+        <td class="nowrap">{{ s.run_date | d }}</td>
+        <td>{{ s.plate }}{% if s.is_refrigerated %} <span class="badge">❄ cold</span>{% endif %}</td>
+        <td class="muted">{{ s.role_on_run }}</td>
+        <td class="num">{{ s.hours_logged | kg }}</td>
+        <td><span class="badge {{ s.status }}">{{ s.status.replace('_', ' ') }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">No shifts assigned yet.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

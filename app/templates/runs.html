@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Delivery runs{% endblock %}
+{% block content %}
+<div class="split">
+  <div>
+    <h1>Delivery runs</h1>
+    <p class="lede">A run is one vehicle, one crew and an ordered list of pickups — the junction table
+      <code>run_batches</code> keeps the sequence.</p>
+  </div>
+</div>
+
+{% if g.user.role_name != 'Volunteer Courier' %}
+<div class="card" style="margin-bottom:18px;">
+  <h3>Plan a new run</h3>
+  <form class="inline" method="post" action="{{ url_for('run_new') }}">
+    <div class="field" style="min-width:180px;">
+      <label for="run_date">Date</label>
+      <input id="run_date" name="run_date" type="date" value="{{ now.strftime('%Y-%m-%d') }}">
+    </div>
+    <div class="field" style="min-width:220px;">
+      <label for="vehicle_id">Vehicle</label>
+      <select id="vehicle_id" name="vehicle_id" required>
+        {% for v in vehicles %}
+          <option value="{{ v.vehicle_id }}">{{ v.plate }} · {{ v.capacity_kg | kg }} kg{{ ' · ❄' if v.is_refrigerated }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field" style="min-width:240px;">
+      <label for="notes">Notes</label>
+      <input id="notes" name="notes" placeholder="Kadıköy → Üsküdar loop">
+    </div>
+    <button>Create run</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card table-wrap">
+  <table>
+    <thead>
+      <tr><th>Run</th><th>Date</th><th>Vehicle</th><th>Lead</th>
+          <th class="num">Batches</th><th class="num">Crew</th><th class="num">Carried kg</th>
+          <th class="num">km</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>#{{ r.run_id }}</td>
+        <td class="nowrap">{{ r.run_date | d }}</td>
+        <td>{{ r.plate }}{% if r.is_refrigerated %} <span class="badge">❄</span>{% endif %}</td>
+        <td>{{ r.lead_name }}</td>
+        <td class="num">{{ r.batch_count }}</td>
+        <td class="num">{{ r.crew_size }}</td>
+        <td class="num">{{ r.carried_kg | kg }}</td>
+        <td class="num">{{ r.total_km if r.total_km is not none else '—' }}</td>
+        <td><span class="badge {{ r.status }}">{{ r.status.replace('_', ' ') }}</span></td>
+        <td class="right"><a class="btn ghost small" href="{{ url_for('run_detail', run_id=r.run_id) }}">Open</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="empty">No runs yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

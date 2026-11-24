@@ -1,0 +1,24 @@
+# Project-local PostgreSQL cluster (never commit data)
+.pgdata/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Environment / secrets
+.env
+.env.local
+
+# Generated documentation artefacts
+docs/report.html
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,314 @@
+==============================================================================
+at_risk_pipeline  --  At-risk batches matched to capable recipients
+==============================================================================
+Sort  (cost=1322.48..1322.49 rows=3 width=131) (actual time=4.307..4.312 rows=63.00 loops=1)
+  Sort Key: matches.expires_at, matches.batch_id, matches.candidate_no
+  Sort Method: quicksort  Memory: 32kB
+  Buffers: shared hit=592
+  ->  Subquery Scan on matches  (cost=1322.37..1322.46 rows=3 width=131) (actual time=4.251..4.288 rows=63.00 loops=1)
+        Buffers: shared hit=592
+        ->  WindowAgg  (cost=1322.37..1322.43 rows=3 width=167) (actual time=4.250..4.285 rows=63.00 loops=1)
+              Window: w1 AS (PARTITION BY b_1.batch_id ORDER BY ((c.max_weekly_kg - COALESCE((sum(a.allocated_kg)), '0'::numeric))) ROWS UNBOUNDED PRECEDING)
+              Run Condition: (row_number() OVER w1 <= 3)
+              Storage: Memory  Maximum Storage: 17kB
+              Buffers: shared hit=592
+              ->  Sort  (cost=1322.35..1322.35 rows=3 width=160) (actual time=4.246..4.254 rows=198.00 loops=1)
+                    Sort Key: b_1.batch_id, ((c.max_weekly_kg - COALESCE((sum(a.allocated_kg)), '0'::numeric))) DESC
+                    Sort Method: quicksort  Memory: 49kB
+                    Buffers: shared hit=592
+                    ->  Hash Right Join  (cost=1317.50..1322.32 rows=3 width=160) (actual time=4.107..4.185 rows=198.00 loops=1)
+                          Hash Cond: ((a.recipient_org_id = c.org_id) AND (b.category_id = b_1.category_id))
+                          Filter: ((c.max_weekly_kg - COALESCE((sum(a.allocated_kg)), '0'::numeric)) >= LEAST((((b_1.quantity_kg - COALESCE(sum(a_1.allocated_kg) FILTER (WHERE (a_1.status <> 'cancelled'::text)), '0'::numeric)))::numeric(8,2)), '20'::numeric))
+                          Rows Removed by Filter: 23
+                          Buffers: shared hit=592
+                          ->  HashAggregate  (cost=827.07..829.07 rows=160 width=38) (actual time=2.719..2.735 rows=92.00 loops=1)
+                                Group Key: a.recipient_org_id, b.category_id
+                                Batches: 1  Memory Usage: 64kB
+                                Buffers: shared hit=309
+                                ->  Hash Join  (cost=452.27..823.30 rows=503 width=12) (actual time=1.731..2.641 rows=498.00 loops=1)
+                                      Hash Cond: (b.batch_id = a.batch_id)
+                                      Buffers: shared hit=309
+                                      ->  Seq Scan on donation_batches b  (cost=0.00..291.00 rows=12000 width=6) (actual time=0.003..0.331 rows=12000.00 loops=1)
+                                            Buffers: shared hit=171
+                                      ->  Hash  (cost=445.98..445.98 rows=503 width=14) (actual time=1.723..1.723 rows=498.00 loops=1)
+                                            Buckets: 1024  Batches: 1  Memory Usage: 32kB
+                                            Buffers: shared hit=138
+                                            ->  Seq Scan on batch_allocations a  (cost=0.00..445.98 rows=503 width=14) (actual time=0.005..1.680 rows=498.00 loops=1)
+                                                  Filter: ((status <> 'cancelled'::text) AND (allocated_at >= (now() - '7 days'::interval)))
+                                                  Rows Removed by Filter: 14901
+                                                  Buffers: shared hit=138
+                          ->  Hash  (cost=490.28..490.28 rows=10 width=102) (actual time=1.382..1.384 rows=221.00 loops=1)
+                                Buckets: 1024  Batches: 1  Memory Usage: 38kB
+                                Buffers: shared hit=283
+                                ->  Nested Loop  (cost=486.15..490.28 rows=10 width=102) (actual time=0.847..1.345 rows=221.00 loops=1)
+                                      Join Filter: (c.category_id = b_1.category_id)
+                                      Rows Removed by Join Filter: 2215
+                                      Buffers: shared hit=283
+                                      ->  GroupAggregate  (cost=484.28..484.32 rows=1 width=189) (actual time=0.823..0.841 rows=21.00 loops=1)
+                                            Group Key: b_1.batch_id, d.name, c_1.name
+                                            Filter: (((b_1.quantity_kg - COALESCE(sum(a_1.allocated_kg) FILTER (WHERE (a_1.status <> 'cancelled'::text)), '0'::numeric)))::numeric(8,2) > '0'::numeric)
+                                            Buffers: shared hit=261
+                                            ->  Sort  (cost=484.28..484.28 rows=1 width=73) (actual time=0.819..0.821 rows=21.00 loops=1)
+                                                  Sort Key: b_1.batch_id, d.name, c_1.name
+                                                  Sort Method: quicksort  Memory: 26kB
+                                                  Buffers: shared hit=261
+                                                  ->  Nested Loop Left Join  (cost=0.29..484.27 rows=1 width=73) (actual time=0.020..0.813 rows=21.00 loops=1)
+                                                        Buffers: shared hit=261
+                                                        ->  Nested Loop  (cost=0.00..474.17 rows=1 width=56) (actual time=0.016..0.792 rows=21.00 loops=1)
+                                                              Join Filter: (c_1.category_id = b_1.category_id)
+                                                              Rows Removed by Join Filter: 76
+                                                              Buffers: shared hit=213
+                                                              ->  Nested Loop  (cost=0.00..472.90 rows=1 width=41) (actual time=0.012..0.751 rows=21.00 loops=1)
+                                                                    Join Filter: (d.org_id = b_1.donor_org_id)
+                                                                    Rows Removed by Join Filter: 215
+                                                                    Buffers: shared hit=192
+                                                                    ->  Seq Scan on donation_batches b_1  (cost=0.00..471.00 rows=1 width=23) (actual time=0.008..0.699 rows=21.00 loops=1)
+                                                                          Filter: ((status = 'available'::text) AND (expires_at >= now()) AND (expires_at <= (now() + '48:00:00'::interval)))
+                                                                          Rows Removed by Filter: 11979
+                                                                          Buffers: shared hit=171
+                                                                    ->  Seq Scan on organizations d  (cost=0.00..1.40 rows=40 width=26) (actual time=0.000..0.001 rows=11.24 loops=21)
+                                                                          Buffers: shared hit=21
+                                                              ->  Seq Scan on food_categories c_1  (cost=0.00..1.12 rows=12 width=17) (actual time=0.000..0.000 rows=4.62 loops=21)
+                                                                    Buffers: shared hit=21
+                                                        ->  Index Scan using allocation_unique_per_recipient on batch_allocations a_1  (cost=0.29..10.08 rows=2 width=21) (actual time=0.001..0.001 rows=0.29 loops=21)
+                                                              Index Cond: (batch_id = b_1.batch_id)
+                                                              Index Searches: 21
+                                                              Buffers: shared hit=48
+                                      ->  Hash Join  (cost=1.88..4.47 rows=118 width=40) (actual time=0.002..0.019 rows=116.00 loops=21)
+                                            Hash Cond: (c.org_id = o.org_id)
+                                            Buffers: shared hit=22
+                                            ->  Seq Scan on org_capabilities c  (cost=0.00..2.24 rows=124 width=11) (actual time=0.001..0.004 rows=124.00 loops=21)
+                                                  Buffers: shared hit=21
+                                            ->  Hash  (cost=1.40..1.40 rows=38 width=33) (actual time=0.012..0.013 rows=38.00 loops=1)
+                                                  Buckets: 1024  Batches: 1  Memory Usage: 11kB
+                                                  Buffers: shared hit=1
+                                                  ->  Seq Scan on organizations o  (cost=0.00..1.40 rows=38 width=33) (actual time=0.003..0.006 rows=38.00 loops=1)
+                                                        Filter: is_active
+                                                        Rows Removed by Filter: 2
+                                                        Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=38
+Planning Time: 0.633 ms
+Execution Time: 4.403 ms
+
+==============================================================================
+donor_leaderboard  --  Donor leaderboard — monthly rank and running total
+==============================================================================
+Limit  (cost=1300.59..1300.67 rows=30 width=110) (actual time=7.405..7.408 rows=30.00 loops=1)
+  Buffers: shared hit=172
+  ->  Sort  (cost=1300.59..1308.71 rows=3245 width=110) (actual time=7.405..7.407 rows=30.00 loops=1)
+        Sort Key: monthly.month DESC, (rank() OVER w2)
+        Sort Method: top-N heapsort  Memory: 33kB
+        Buffers: shared hit=172
+        ->  WindowAgg  (cost=1131.76..1204.75 rows=3245 width=110) (actual time=7.334..7.372 rows=95.00 loops=1)
+              Window: w2 AS (PARTITION BY monthly.month ORDER BY monthly.rescued_kg ROWS UNBOUNDED PRECEDING)
+              Storage: Memory  Maximum Storage: 17kB
+              Buffers: shared hit=172
+              ->  Sort  (cost=1131.74..1139.85 rows=3245 width=102) (actual time=7.332..7.336 rows=95.00 loops=1)
+                    Sort Key: monthly.month, monthly.rescued_kg DESC
+                    Sort Method: quicksort  Memory: 31kB
+                    Buffers: shared hit=172
+                    ->  WindowAgg  (cost=877.61..942.49 rows=3245 width=102) (actual time=7.261..7.306 rows=95.00 loops=1)
+                          Window: w1 AS (PARTITION BY monthly.donor_org_id ORDER BY monthly.month)
+                          Storage: Memory  Maximum Storage: 17kB
+                          Buffers: shared hit=172
+                          ->  Sort  (cost=877.59..885.71 rows=3245 width=70) (actual time=7.256..7.260 rows=95.00 loops=1)
+                                Sort Key: monthly.donor_org_id, monthly.month
+                                Sort Method: quicksort  Memory: 31kB
+                                Buffers: shared hit=172
+                                ->  Subquery Scan on monthly  (cost=590.99..688.34 rows=3245 width=70) (actual time=7.209..7.240 rows=95.00 loops=1)
+                                      Buffers: shared hit=172
+                                      ->  HashAggregate  (cost=590.99..655.89 rows=3245 width=78) (actual time=7.208..7.235 rows=95.00 loops=1)
+                                            Group Key: b.donor_org_id, o.name, date_trunc('month'::text, b.created_at)
+                                            Batches: 1  Memory Usage: 121kB
+                                            Buffers: shared hit=172
+                                            ->  Hash Join  (cost=1.90..550.43 rows=3245 width=47) (actual time=0.029..5.581 rows=9167.00 loops=1)
+                                                  Hash Cond: (b.donor_org_id = o.org_id)
+                                                  Buffers: shared hit=172
+                                                  ->  Seq Scan on donation_batches b  (cost=0.00..531.00 rows=3245 width=17) (actual time=0.014..3.964 rows=9167.00 loops=1)
+                                                        Filter: ((status = ANY ('{delivered,claimed}'::text[])) AND ((date_trunc('month'::text, created_at))::date >= (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone) - '3 mons'::interval)))
+                                                        Rows Removed by Filter: 2833
+                                                        Buffers: shared hit=171
+                                                  ->  Hash  (cost=1.40..1.40 rows=40 width=26) (actual time=0.011..0.011 rows=40.00 loops=1)
+                                                        Buckets: 1024  Batches: 1  Memory Usage: 11kB
+                                                        Buffers: shared hit=1
+                                                        ->  Seq Scan on organizations o  (cost=0.00..1.40 rows=40 width=26) (actual time=0.003..0.006 rows=40.00 loops=1)
+                                                              Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=2
+Planning Time: 0.156 ms
+Execution Time: 7.483 ms
+
+==============================================================================
+fill_rate  --  Fill rate per food category (subquery in FROM)
+==============================================================================
+Sort  (cost=1611.48..1611.98 rows=200 width=118) (actual time=15.726..15.730 rows=10.00 loops=1)
+  Sort Key: (round(avg((((100.0 * COALESCE(sum(a.allocated_kg) FILTER (WHERE (a.status <> 'cancelled'::text)), '0'::numeric)) / b.quantity_kg))), 1)), c.name
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=310
+  ->  HashAggregate  (cost=1599.34..1603.84 rows=200 width=118) (actual time=15.712..15.721 rows=10.00 loops=1)
+        Group Key: c.name
+        Batches: 1  Memory Usage: 32kB
+        Buffers: shared hit=310
+        ->  HashAggregate  (cost=983.38..1252.86 rows=15399 width=55) (actual time=10.457..13.841 rows=12000.00 loops=1)
+              Group Key: b.batch_id, c.name
+              Batches: 1  Memory Usage: 4369kB
+              Buffers: shared hit=310
+              ->  Hash Join  (cost=442.27..829.39 rows=15399 width=40) (actual time=1.649..6.381 rows=17644.00 loops=1)
+                    Hash Cond: (b.category_id = c.category_id)
+                    Buffers: shared hit=310
+                    ->  Hash Right Join  (cost=441.00..773.42 rows=15399 width=28) (actual time=1.634..4.658 rows=17644.00 loops=1)
+                          Hash Cond: (a.batch_id = b.batch_id)
+                          Buffers: shared hit=309
+                          ->  Seq Scan on batch_allocations a  (cost=0.00..291.99 rows=15399 width=21) (actual time=0.005..0.512 rows=15399.00 loops=1)
+                                Buffers: shared hit=138
+                          ->  Hash  (cost=291.00..291.00 rows=12000 width=11) (actual time=1.586..1.587 rows=12000.00 loops=1)
+                                Buckets: 16384  Batches: 1  Memory Usage: 644kB
+                                Buffers: shared hit=171
+                                ->  Seq Scan on donation_batches b  (cost=0.00..291.00 rows=12000 width=11) (actual time=0.005..0.759 rows=12000.00 loops=1)
+                                      Buffers: shared hit=171
+                    ->  Hash  (cost=1.12..1.12 rows=12 width=16) (actual time=0.010..0.012 rows=12.00 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=1
+                          ->  Seq Scan on food_categories c  (cost=0.00..1.12 rows=12 width=16) (actual time=0.007..0.008 rows=12.00 loops=1)
+                                Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=19
+Planning Time: 0.241 ms
+Execution Time: 16.211 ms
+
+==============================================================================
+dormant_donors  --  Dormant donors (NOT EXISTS anti-join)
+==============================================================================
+Sort  (cost=789.25..789.30 rows=23 width=45) (actual time=2.478..2.478 rows=1.00 loops=1)
+  Sort Key: ((max(b.created_at))::date) NULLS FIRST
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=343
+  ->  HashAggregate  (cost=788.44..788.73 rows=23 width=45) (actual time=2.476..2.477 rows=1.00 loops=1)
+        Group Key: o.name
+        Batches: 1  Memory Usage: 32kB
+        Buffers: shared hit=343
+        ->  Hash Right Join  (cost=404.74..767.74 rows=2760 width=45) (actual time=1.568..2.421 rows=492.00 loops=1)
+              Hash Cond: (b.donor_org_id = o.org_id)
+              Buffers: shared hit=343
+              ->  Seq Scan on donation_batches b  (cost=0.00..291.00 rows=12000 width=16) (actual time=0.004..0.331 rows=12000.00 loops=1)
+                    Buffers: shared hit=171
+              ->  Hash  (cost=404.63..404.63 rows=9 width=33) (actual time=1.554..1.554 rows=1.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=172
+                    ->  Hash Right Anti Join  (cost=1.79..404.63 rows=9 width=33) (actual time=1.552..1.553 rows=1.00 loops=1)
+                          Hash Cond: (recent.donor_org_id = o.org_id)
+                          Buffers: shared hit=172
+                          ->  Seq Scan on donation_batches recent  (cost=0.00..381.00 rows=2348 width=4) (actual time=0.003..1.410 rows=2360.00 loops=1)
+                                Filter: (created_at > (now() - '30 days'::interval))
+                                Rows Removed by Filter: 9640
+                                Buffers: shared hit=171
+                          ->  Hash  (cost=1.50..1.50 rows=23 width=33) (actual time=0.011..0.011 rows=23.00 loops=1)
+                                Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                Buffers: shared hit=1
+                                ->  Seq Scan on organizations o  (cost=0.00..1.50 rows=23 width=33) (actual time=0.005..0.008 rows=23.00 loops=1)
+                                      Filter: (is_active AND (org_type = 'donor'::text))
+                                      Rows Removed by Filter: 17
+                                      Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=4
+Planning Time: 0.121 ms
+Execution Time: 2.498 ms
+
+==============================================================================
+top_donors_per_district  --  Top two donors per district (ROW_NUMBER top-N-per-group)
+==============================================================================
+Incremental Sort  (cost=396.03..398.43 rows=24 width=109) (actual time=3.495..3.496 rows=18.00 loops=1)
+  Sort Key: ranked.district, ranked.rn
+  Presorted Key: ranked.district
+  Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+  Buffers: shared hit=172
+  ->  Subquery Scan on ranked  (cost=395.97..397.35 rows=24 width=109) (actual time=3.467..3.490 rows=18.00 loops=1)
+        Buffers: shared hit=172
+        ->  WindowAgg  (cost=395.97..397.05 rows=24 width=113) (actual time=3.466..3.488 rows=18.00 loops=1)
+              Window: w2 AS (PARTITION BY rescued.district)
+              Filter: ((row_number() OVER w1) <= 2)
+              Rows Removed by Filter: 6
+              Storage: Memory  Maximum Storage: 17kB
+              Buffers: shared hit=172
+              ->  WindowAgg  (cost=395.97..396.51 rows=24 width=77) (actual time=3.461..3.469 rows=24.00 loops=1)
+                    Window: w1 AS (PARTITION BY rescued.district ORDER BY rescued.rescued_kg, rescued.donor_name ROWS UNBOUNDED PRECEDING)
+                    Run Condition: (row_number() OVER w1 <= 2)
+                    Storage: Memory  Maximum Storage: 17kB
+                    Buffers: shared hit=172
+                    ->  Sort  (cost=395.97..396.03 rows=24 width=69) (actual time=3.457..3.459 rows=24.00 loops=1)
+                          Sort Key: rescued.district, rescued.rescued_kg DESC, rescued.donor_name
+                          Sort Method: quicksort  Memory: 26kB
+                          Buffers: shared hit=172
+                          ->  Subquery Scan on rescued  (cost=394.88..395.42 rows=24 width=69) (actual time=3.442..3.448 rows=24.00 loops=1)
+                                Buffers: shared hit=172
+                                ->  HashAggregate  (cost=394.88..395.18 rows=24 width=73) (actual time=3.442..3.446 rows=24.00 loops=1)
+                                      Group Key: o.name
+                                      Batches: 1  Memory Usage: 32kB
+                                      Buffers: shared hit=172
+                                      ->  Hash Join  (cost=1.80..351.06 rows=5842 width=38) (actual time=0.026..2.092 rows=9736.00 loops=1)
+                                            Hash Cond: (b.donor_org_id = o.org_id)
+                                            Buffers: shared hit=172
+                                            ->  Seq Scan on donation_batches b  (cost=0.00..321.00 rows=9736 width=9) (actual time=0.011..1.113 rows=9736.00 loops=1)
+                                                  Filter: (status = ANY ('{delivered,claimed}'::text[]))
+                                                  Rows Removed by Filter: 2264
+                                                  Buffers: shared hit=171
+                                            ->  Hash  (cost=1.50..1.50 rows=24 width=33) (actual time=0.010..0.010 rows=24.00 loops=1)
+                                                  Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                                  Buffers: shared hit=1
+                                                  ->  Seq Scan on organizations o  (cost=0.00..1.50 rows=24 width=33) (actual time=0.003..0.006 rows=24.00 loops=1)
+                                                        Filter: (org_type = 'donor'::text)
+                                                        Rows Removed by Filter: 16
+                                                        Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=2
+Planning Time: 0.139 ms
+Execution Time: 3.528 ms
+
+==============================================================================
+app_donor_batches  --  Donor dashboard: one donor's batches, newest first
+==============================================================================
+Limit  (cost=340.29..340.41 rows=50 width=67) (actual time=0.542..0.547 rows=50.00 loops=1)
+  Buffers: shared hit=172
+  ->  Sort  (cost=340.29..341.51 rows=490 width=67) (actual time=0.542..0.544 rows=50.00 loops=1)
+        Sort Key: b.created_at DESC
+        Sort Method: top-N heapsort  Memory: 36kB
+        Buffers: shared hit=172
+        ->  Hash Join  (cost=1.27..324.01 rows=490 width=67) (actual time=0.011..0.471 rows=490.00 loops=1)
+              Hash Cond: (b.category_id = c.category_id)
+              Buffers: shared hit=172
+              ->  Seq Scan on donation_batches b  (cost=0.00..321.00 rows=490 width=55) (actual time=0.004..0.390 rows=490.00 loops=1)
+                    Filter: (donor_org_id = 7)
+                    Rows Removed by Filter: 11510
+                    Buffers: shared hit=171
+              ->  Hash  (cost=1.12..1.12 rows=12 width=16) (actual time=0.005..0.005 rows=12.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=1
+                    ->  Seq Scan on food_categories c  (cost=0.00..1.12 rows=12 width=16) (actual time=0.002..0.003 rows=12.00 loops=1)
+                          Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=4
+Planning Time: 0.068 ms
+Execution Time: 0.559 ms
+
+==============================================================================
+app_recipient_claims  --  Coordinator portal: one recipient's active claims
+==============================================================================
+Sort  (cost=402.24..402.25 rows=4 width=56) (actual time=0.554..0.555 rows=4.00 loops=1)
+  Sort Key: a.allocated_at DESC
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=150
+  ->  Nested Loop  (cost=0.29..402.20 rows=4 width=56) (actual time=0.007..0.552 rows=4.00 loops=1)
+        Buffers: shared hit=150
+        ->  Seq Scan on batch_allocations a  (cost=0.00..368.99 rows=4 width=33) (actual time=0.004..0.547 rows=4.00 loops=1)
+              Filter: ((recipient_org_id = 28) AND (status = 'reserved'::text))
+              Rows Removed by Filter: 15395
+              Buffers: shared hit=138
+        ->  Index Scan using donation_batches_pkey on donation_batches b  (cost=0.29..8.30 rows=1 width=31) (actual time=0.001..0.001 rows=1.00 loops=4)
+              Index Cond: (batch_id = a.batch_id)
+              Index Searches: 4
+              Buffers: shared hit=12
+Planning:
+  Buffers: shared hit=15
+Planning Time: 0.091 ms
+Execution Time: 0.564 ms

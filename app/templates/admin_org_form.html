@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Edit organisation{% endblock %}
+{% block content %}
+<h1>Edit {{ org.name }}</h1>
+<p class="lede">Organisation #{{ org.org_id }} · created {{ org.created_at | dt }}</p>
+
+<div class="card" style="max-width:760px;">
+  <form class="stack" method="post">
+    <div class="field"><label>Name</label><input name="name" value="{{ org.name }}" required></div>
+    <div class="row2">
+      <div class="field"><label>Type</label>
+        <select name="org_type">
+          <option value="donor" {{ 'selected' if org.org_type == 'donor' }}>donor</option>
+          <option value="recipient" {{ 'selected' if org.org_type == 'recipient' }}>recipient</option>
+        </select>
+      </div>
+      <div class="field"><label>Tax id</label><input name="tax_id" value="{{ org.tax_id }}" required></div>
+    </div>
+    <div class="field"><label>Address</label><input name="address" value="{{ org.address }}" required></div>
+    <div class="row2">
+      <div class="field"><label>District</label><input name="district" value="{{ org.district }}" required></div>
+      <div class="field"><label>Phone</label><input name="phone" value="{{ org.phone }}" required></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Contact e-mail</label><input name="contact_email" type="email" value="{{ org.contact_email }}" required></div>
+      <div class="field"><label>Cold storage (kg)</label>
+        <input name="cold_storage_kg" type="number" step="1" min="0" value="{{ org.cold_storage_kg }}">
+      </div>
+    </div>
+    <label class="inline" style="gap:8px;">
+      <input type="checkbox" name="is_active" style="width:auto;" {{ 'checked' if org.is_active }}> active partner
+    </label>
+    <div class="inline">
+      <button>Save changes</button>
+      <a class="btn ghost" href="{{ url_for('admin_organizations') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

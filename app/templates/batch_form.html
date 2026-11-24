@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit batch' if batch else 'New batch' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit batch #' ~ batch.batch_id if batch else 'Publish a surplus batch' }}</h1>
+<p class="lede">Expiry is a hard constraint in the schema: the database rejects any batch whose expiry
+  precedes its preparation time.</p>
+
+<div class="card" style="max-width:760px;">
+  <form class="stack" method="post">
+    <div class="field">
+      <label for="item_description">What is it?</label>
+      <input id="item_description" name="item_description" required maxlength="200"
+             value="{{ batch.item_description if batch else '' }}"
+             placeholder="e.g. Assorted sourdough loaves">
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="category_id">Food category</label>
+        <select id="category_id" name="category_id" required>
+          {% for c in categories %}
+            <option value="{{ c.category_id }}"
+              {{ 'selected' if batch and batch.category_id == c.category_id }}>
+              {{ c.name }}{% if c.needs_refrigeration %} (refrigerated){% endif %} · {{ c.shelf_life_days }} d
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="quantity_kg">Quantity (kg)</label>
+        <input id="quantity_kg" name="quantity_kg" type="number" min="0.1" step="0.1" required
+               value="{{ batch.quantity_kg if batch else '' }}" placeholder="25">
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="prepared_at">Prepared at</label>
+        <input id="prepared_at" name="prepared_at" type="datetime-local" required
+               value="{{ (batch.prepared_at.strftime('%Y-%m-%dT%H:%M') if batch else (now.strftime('%Y-%m-%dT%H:%M'))) }}">
+      </div>
+      <div class="field">
+        <label for="expires_at">Expires at</label>
+        <input id="expires_at" name="expires_at" type="datetime-local" required
+               value="{{ (batch.expires_at.strftime('%Y-%m-%dT%H:%M') if batch else ((now + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M'))) }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="storage_temp_c">Storage temperature (°C)</label>
+      <input id="storage_temp_c" name="storage_temp_c" type="number" step="0.1" required
+             value="{{ batch.storage_temp_c if batch else '3.5' }}">
+      <small>Below 8 °C for refrigerated categories; the cold-chain check enforces it at dispatch.</small>
+    </div>
+
+    <div class="inline">
+      <button type="submit">{{ 'Save changes' if batch else 'Publish batch' }}</button>
+      <a class="btn ghost" href="{{ url_for('batches') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Food taxonomy{% endblock %}
+{% block content %}
+<h1>Food categories</h1>
+<p class="lede">Categories carry the refrigeration rule and the shelf life used to validate batches, plus
+  the kg-per-meal factor used to turn rescued kilograms into meals.</p>
+
+<div class="card" style="margin-bottom:18px;">
+  <h3>Add a category</h3>
+  <form class="inline" method="post">
+    <div class="field" style="min-width:220px;"><label>Name</label><input name="name" required></div>
+    <div class="field" style="min-width:130px;"><label>Shelf life (days)</label>
+      <input name="shelf_life_days" type="number" min="1" value="3" required></div>
+    <div class="field" style="min-width:130px;"><label>kg per meal</label>
+      <input name="kg_per_meal" type="number" step="0.05" min="0.05" value="0.4" required></div>
+    <label class="inline" style="gap:6px; padding-top:18px;">
+      <input type="checkbox" name="needs_refrigeration" style="width:auto;"> refrigerated
+    </label>
+    <div style="padding-top:18px;"><button>Create</button></div>
+  </form>
+</div>
+
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Category</th><th>Refrigerated</th><th class="num">Shelf life</th>
+      <th class="num">kg / meal</th><th class="num">Batches</th><th class="num">Recipients able to accept</th></tr></thead>
+    <tbody>
+    {% for c in rows %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ '❄ yes' if c.needs_refrigeration else 'no' }}</td>
+        <td class="num">{{ c.shelf_life_days }} d</td>
+        <td class="num">{{ c.kg_per_meal }}</td>
+        <td class="num">{{ c.batches | num }}</td>
+        <td class="num">{{ c.recipients | num }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

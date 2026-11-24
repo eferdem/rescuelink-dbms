@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Partners{% endblock %}
+{% block content %}
+<h1>Partner organisations</h1>
+<p class="lede">Donors and recipients share one table with a discriminating <code>org_type</code> column —
+  both are organisations, so splitting them would duplicate the address and contact attributes.</p>
+
+<div class="card" style="margin-bottom:18px;">
+  <h3>Add a partner</h3>
+  <form class="grid" method="post" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+    <div class="field"><label>Name</label><input name="name" required></div>
+    <div class="field"><label>Type</label>
+      <select name="org_type"><option value="donor">donor</option><option value="recipient">recipient</option></select>
+    </div>
+    <div class="field"><label>Tax id</label><input name="tax_id" required></div>
+    <div class="field"><label>Address</label><input name="address" required></div>
+    <div class="field"><label>District</label><input name="district" required></div>
+    <div class="field"><label>Contact e-mail</label><input name="contact_email" type="email" required></div>
+    <div class="field"><label>Phone</label><input name="phone" required></div>
+    <div class="field"><label>Cold storage (kg)</label><input name="cold_storage_kg" type="number" step="1" min="0" value="0"></div>
+    <div class="field" style="align-self:end;"><button>Create</button></div>
+  </form>
+</div>
+
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>District</th><th>Contact</th>
+      <th class="num">Storage kg</th><th class="num">Batches</th><th class="num">Claims</th>
+      <th class="num">Staff</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+    {% for o in orgs %}
+      <tr>
+        <td>{{ o.name }}<br><span class="small muted">#{{ o.org_id }} · {{ o.tax_id }}</span></td>
+        <td><span class="badge {{ 'available' if o.org_type == 'donor' else 'claimed' }}">{{ o.org_type }}</span></td>
+        <td>{{ o.district }}</td>
+        <td class="small">{{ o.contact_email }}<br>{{ o.phone }}</td>
+        <td class="num">{{ o.cold_storage_kg | kg }}</td>
+        <td class="num">{{ o.batches }}</td>
+        <td class="num">{{ o.claims }}</td>
+        <td class="num">{{ o.staff }}</td>
+        <td>{{ 'yes' if o.is_active else 'no' }}</td>
+        <td class="right nowrap">
+          <a class="btn ghost small" href="{{ url_for('admin_org_edit', org_id=o.org_id) }}">Edit</a>
+          <form method="post" action="{{ url_for('admin_org_delete', org_id=o.org_id) }}" style="display:inline"
+                onsubmit="return confirm('Delete {{ o.name }}?');">
+            <button class="danger small">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Batches{% endblock %}
+{% block content %}
+<div class="split">
+  <div>
+    <h1>Donation batches</h1>
+    <p class="lede">Every batch with its derived remaining quantity. Remaining kg is computed from
+      the allocation ledger, never stored, so it cannot drift.</p>
+  </div>
+  {% if g.user.role_name == 'Donor Staff' %}
+    <a class="btn" href="{{ url_for('batch_new') }}">Publish a batch →</a>
+  {% endif %}
+</div>
+
+{% if g.user.role_name == 'Admin' %}
+<form class="inline card tight" method="get" style="margin-bottom:14px;">
+  <label for="donor">Filter by donor</label>
+  <select id="donor" name="donor" style="max-width:340px;">
+    <option value="">All donors</option>
+    {% for d in donors %}
+      <option value="{{ d.org_id }}" {{ 'selected' if donor_filter == d.org_id }}>{{ d.name }}</option>
+    {% endfor %}
+  </select>
+  <button class="ghost">Apply</button>
+  {% if donor_filter %}<a class="small" href="{{ url_for('batches') }}">clear</a>{% endif %}
+</form>
+{% endif %}
+
+<div class="card table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Batch</th><th>Donor</th><th>Item</th><th>Category</th>
+        <th class="num">Total kg</th><th class="num">Remaining</th>
+        <th>Status</th><th>Expires</th><th class="num">Claims</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in rows %}
+      <tr>
+        <td>#{{ b.batch_id }}</td>
+        <td>{{ b.donor_name }}<br><span class="small muted">{{ b.district }}</span></td>
+        <td>{{ b.item_description }}</td>
+        <td class="muted">{{ b.category_name }}{% if b.needs_refrigeration %} <span class="badge">❄</span>{% endif %}</td>
+        <td class="num">{{ b.quantity_kg | kg }}</td>
+        <td class="num">{{ b.remaining_kg | kg }}</td>
+        <td><span class="badge {{ b.status }}">{{ b.status }}</span></td>
+        <td class="nowrap">{{ b.expires_at | dt }}</td>
+        <td class="num">{{ b.allocations }}</td>
+        <td class="right nowrap">
+          {% if b.status == 'available' %}
+            <a class="btn ghost small" href="{{ url_for('batch_edit', batch_id=b.batch_id) }}">Edit</a>
+            <form method="post" action="{{ url_for('batch_withdraw', batch_id=b.batch_id) }}" style="display:inline"
+                  onsubmit="return confirm('Withdraw batch #{{ b.batch_id }}?');">
+              <button class="danger small">Withdraw</button>
+            </form>
+          {% endif %}
+          {% if g.user.role_name == 'Admin' and b.status == 'available' %}
+            <a class="small" href="{{ url_for('transaction', batch_id=b.batch_id) }}">claim</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="empty">No batches found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="small muted mt">Showing up to 200 rows. Withdrawal is a soft delete: the audit trail and any existing
+claims stay intact, which is why the record is never physically removed.</p>
+{% endblock %}

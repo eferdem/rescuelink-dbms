@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Dispatch transaction{% endblock %}
+{% block content %}
+<h1>Reserve &amp; dispatch — ACID transaction</h1>
+<p class="lede">One form, seven tables, a row lock and an all-or-nothing outcome. Pick a failure mode to
+  watch PostgreSQL roll every write back.</p>
+
+{% if result %}
+  <div class="banner {{ 'ok' if result.ok else 'error' }}">
+    {% if result.ok %}
+      Committed — allocation #{{ result.summary.allocation_id }}, run #{{ result.summary.run_id }},
+      {{ result.summary.requested_kg }} kg reserved. Remaining on batch: {{ result.summary.remaining_kg }} kg.
+    {% else %}
+      Rolled back — {{ result.error }}
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="grid two">
+  <div class="card">
+    <h3>Dispatch form</h3>
+    <form class="stack" method="post" id="dispatch-form">
+      <div class="field">
+        <label for="batch_id">Batch</label>
+        <select id="batch_id" name="batch_id" required>
+          {% for b in lookups.batches %}
+            <option value="{{ b.batch_id }}" data-remaining="{{ b.remaining_kg }}"
+              {{ 'selected' if selected_batch == b.batch_id }}>
+              #{{ b.batch_id }} · {{ b.donor_name }} · {{ b.item_description }}
+              — {{ b.remaining_kg | kg }} kg left, exp {{ b.expires_at | dt }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if not lookups.batches %}<small>No available batches right now — publish one as a donor first.</small>{% endif %}
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="kg">Quantity to claim (kg)</label>
+          <input id="kg" name="kg" type="number" min="0.1" step="0.1" required value="{{ values.get('kg', '20') }}">
+          <small id="remaining-hint" class="muted"></small>
+        </div>
+        <div class="field">
+          <label for="temp_c">Cold-chain probe (°C)</label>
+          <input id="temp_c" name="temp_c" type="number" step="0.1" value="{{ values.get('temp_c', '3.5') }}">
+          <small>Refrigerated food above 8 °C aborts the dispatch.</small>
+        </div>
+      </div>
+
+      {% if g.user.role_name == 'Admin' %}
+      <div class="field">
+        <label for="recipient_org_id">Recipient organisation</label>
+        <select id="recipient_org_id" name="recipient_org_id" required>
+          {% for r in lookups.recipients %}
+            <option value="{{ r.org_id }}" {{ 'selected' if values.get('recipient_org_id')|int == r.org_id }}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <div class="field">
+        <label>Recipient organisation</label>
+        <input value="{{ g.user.org_name }}" disabled>
+        <small>Fixed to your account — an admin can dispatch on behalf of any recipient.</small>
+      </div>
+      {% endif %}
+
+      <div class="row2">
+        <div class="field">
+          <label for="volunteer_id">Courier (needs a valid C1 licence)</label>
+          <select id="volunteer_id" name="volunteer_id" required>
+            {% for v in lookups.volunteers %}
+              <option value="{{ v.user_id }}" {{ 'selected' if values.get('volunteer_id')|int == v.user_id }} {{ 'disabled' if not v.eligible }}>
+                {{ v.full_name }}{% if not v.eligible %} — licence expired{% elif v.expires_on %} — C1 until {{ v.expires_on | d }}{% else %} — no licence{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="vehicle_id">Vehicle</label>
+          <select id="vehicle_id" name="vehicle_id" required>
+            {% for v in lookups.vehicles %}
+              <option value="{{ v.vehicle_id }}" {{ 'selected' if values.get('vehicle_id')|int == v.vehicle_id }}>{{ v.plate }} · {{ v.capacity_kg | kg }} kg{{ ' · refrigerated' if v.is_refrigerated }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="mode">Failure injection (for the demo)</label>
+        <select id="mode" name="mode">
+          {% for value, label in failure_modes.items() %}
+            <option value="{{ value }}" {{ 'selected' if values.get('mode') == value }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit">Run transaction</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>The seven steps</h3>
+    <ol class="small" style="margin:0; padding-left:18px; line-height:1.9;">
+      <li><code>BEGIN</code></li>
+      <li><code>SELECT … FOR UPDATE</code> locks the batch row</li>
+      <li>Validate status, expiry and remaining quantity</li>
+      <li><code>INSERT batch_allocations</code></li>
+      <li><code>INSERT cold_chain_checks</code> and guard the probe</li>
+      <li><code>INSERT delivery_runs</code>, <code>run_batches</code>, <code>shift_assignments</code> (licence check)</li>
+      <li><code>UPDATE donation_batches</code>, <code>INSERT audit_log</code>, <code>COMMIT</code></li>
+    </ol>
+    <p class="small muted mt">If any step fails, the handler issues <code>ROLLBACK</code> and the row counts
+      below prove that nothing survived. Try the <em>slow lock</em> mode in two browser tabs to see the
+      second coordinator block on the row lock.</p>
+    <p class="small muted">Transaction isolation: PostgreSQL default (READ COMMITTED). The row lock is what
+      prevents two coordinators from over-claiming the same batch.</p>
+  </div>
+</div>
+
+{% if result %}
+<h2>Statement trace</h2>
+<div class="trace">
+  {% for step in result.trace %}
+    <div class="trace-step {{ 'error' if step.status == 'error' }}">
+      <div class="head">
+        <span>{{ step.step }}</span>
+        <span class="small {{ 'muted' if step.status == 'ok' }}">{{ 'OK' if step.status == 'ok' else 'FAILED' }}{% if step.ms %} · {{ step.ms }} ms{% endif %}</span>
+      </div>
+      {% if step.sql %}<div class="sql mono">{{ step.sql }}</div>{% endif %}
+      {% if step.get('params') %}<div class="sql">params: {{ step.params }}</div>{% endif %}
+      {% if step.get('rows') is not none and step.get('rows') >= 0 %}<div class="sql">rows: {{ step.rows }}</div>{% endif %}
+      {% if step.get('detail') %}<div class="sql">{{ step.detail }}</div>{% endif %}
+      {% if step.error %}<div class="err">{{ step.error }}</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<h2>Proof: table row counts</h2>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Table</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for table, counts in result.counts.items() %}
+      <tr>
+        <td><code>{{ table }}</code></td>
+        <td class="num">{{ counts[0] | num }}</td>
+        <td class="num">{{ counts[1] | num }}</td>
+        <td class="num">{{ counts[1] - counts[0] }}</td>
+        <td>
+          {% if counts[1] == counts[0] %}<span class="badge withdrawn">unchanged</span>
+          {% else %}<span class="badge available">+{{ counts[1] - counts[0] }} written</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="small muted mt">Mode: <b>{{ result.mode_label }}</b>.
+  {% if result.ok %}All seven tables advanced together.{% else %}Every table is byte-for-byte back to its
+  pre-transaction state — that is what atomicity buys you.{% endif %}</p>
+{% endif %}
+
+<script>
+  const batchSelect = document.getElementById('batch_id');
+  const hint = document.getElementById('remaining-hint');
+  const kg = document.getElementById('kg');
+  function refreshHint() {
+    const opt = batchSelect.options[batchSelect.selectedIndex];
+    if (!opt || !hint) return;
+    const remaining = opt.dataset.remaining;
+    hint.textContent = remaining ? ('available: ' + remaining + ' kg') : '';
+    if (remaining) {
+      kg.max = remaining;
+      if (parseFloat(kg.value) > parseFloat(remaining)) {
+        kg.value = remaining;
+      }
+    }
+  }
+  if (batchSelect) { batchSelect.addEventListener('change', refreshHint); refreshHint(); }
+</script>
+{% endblock %}

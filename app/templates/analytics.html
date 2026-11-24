@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>Analytics</h1>
+<p class="lede">Nine queries read straight from <code>sql/04_queries.sql</code> — the same file that the
+  report and the <code>psql</code> demo use. Each card names the SQL technique it demonstrates.</p>
+
+<div class="tabs">
+  {% for r in results %}
+    <a href="#{{ r.name }}">{{ loop.index }}. {{ r.name.replace('_', ' ') }}</a>
+  {% endfor %}
+</div>
+
+{% for r in results %}
+<section class="card" id="{{ r.name }}" style="margin-bottom:18px;">
+  <div class="split">
+    <div>
+      <h3>{{ r.title }}</h3>
+      <p class="small muted" style="margin:0 0 6px;">{{ r.description }}</p>
+      <p class="small" style="margin:0;"><b>Technique:</b> {{ r.techniques }}</p>
+    </div>
+    <div class="right small muted">
+      <div><b>{{ r.ms }} ms</b></div>
+      <div>{{ r.row_count }} row{{ '' if r.row_count == 1 else 's' }}</div>
+      {% if r.row_count > r.rows | length %}<div>showing first {{ r.rows | length }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% if r.error %}
+    <div class="flash error mt">{{ r.error }}</div>
+  {% else %}
+    {% if r.rows %}
+    <div class="table-wrap mt">
+      <table>
+        <thead>
+          <tr>{% for col in r.columns %}<th>{{ col.replace('_', ' ') }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in r.rows %}
+          <tr>
+            {% for col in r.columns %}
+              <td class="{{ 'num' if row[col] is number else '' }}">{{ row[col] | cell }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="empty">No rows matched the filter.</p>
+    {% endif %}
+  {% endif %}
+
+  <details class="mt">
+    <summary>Show the SQL</summary>
+    <pre>{{ r.sql }}</pre>
+  </details>
+</section>
+{% endfor %}
+
+<p class="small muted">Every statement here is executed through <code>cursor.execute(sql)</code> with no
+  parameters — the analytical suite is read-only and takes no user input. All writes elsewhere in the
+  application use placeholders.</p>
+{% endblock %}

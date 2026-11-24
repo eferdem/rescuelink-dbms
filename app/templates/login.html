@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="auth-shell" style="margin:-24px -22px -60px;">
+  <div class="auth-left hero">
+    <div class="brand" style="color:#fff; font-size:22px; margin-bottom:26px;">Rescue<span style="color:#7dd3c7">Link</span></div>
+    <h1>Surplus food,<br>routed to the people who need it.</h1>
+    <p>Donors publish batches before they spoil, coordinators claim them, volunteer
+       couriers run the route. Every kilogram is traceable from shelf to plate —
+       with a row lock in the way of double-booking.</p>
+    <div class="stat-line" style="margin-top:26px; color:#bfe8e1;">
+      <span><b style="color:#fff">4</b> roles</span>
+      <span><b style="color:#fff">18</b> normalised tables &amp; views</span>
+      <span><b style="color:#fff">1</b> rigid ACID dispatch</span>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-card">
+      <h1>Sign in</h1>
+      <p class="lede">Use your partner account, or jump straight in with a demo role.</p>
+
+      <form class="stack" method="post">
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input id="email" name="email" type="email" placeholder="you@partner.org" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+
+      {% if DEMO_MODE %}
+      <div class="mt">
+        <h3 style="margin-bottom:2px;">One-click demo roles</h3>
+        <p class="small muted" style="margin:0;">Password for every seeded account: <code>Demo1234!</code></p>
+        <div class="demo-list">
+          {% for account in demo_accounts %}
+          <form method="post" action="{{ url_for('switch_role') }}">
+            <input type="hidden" name="email" value="{{ account.email }}">
+            <button class="demo-btn" type="submit">
+              <span>{{ account.full_name }}{% if account.org_name %}<br><span class="role">{{ account.org_name }}</span>{% endif %}</span>
+              <span class="role">{{ ROLE_LABELS[account.role_name] }} →</span>
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

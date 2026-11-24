@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}RescueLink{% endblock %} · Surplus Food Rescue Network</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if g.user %}
+{% set role = g.user.role_name %}
+<header class="topbar">
+  <a class="brand" href="{{ url_for('dashboard') }}">Rescue<span>Link</span></a>
+  <nav>
+    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+    {% if role in ('Donor Staff', 'Admin') %}
+      <a href="{{ url_for('batches') }}" class="{{ 'active' if request.endpoint in ('batches', 'batch_edit') }}">Batches</a>
+    {% endif %}
+    {% if role == 'Donor Staff' %}
+      <a href="{{ url_for('batch_new') }}" class="{{ 'active' if request.endpoint == 'batch_new' }}">New batch</a>
+    {% endif %}
+    {% if role == 'Recipient Coordinator' %}
+      <a href="{{ url_for('claims') }}" class="{{ 'active' if request.endpoint == 'claims' }}">Claim food</a>
+      <a href="{{ url_for('transaction') }}" class="{{ 'active' if request.endpoint == 'transaction' }}">Dispatch (ACID)</a>
+    {% endif %}
+    {% if role in ('Recipient Coordinator', 'Admin', 'Volunteer Courier') %}
+      <a href="{{ url_for('runs') }}" class="{{ 'active' if request.endpoint in ('runs', 'run_detail') }}">Runs</a>
+    {% endif %}
+    {% if role in ('Admin', 'Recipient Coordinator') %}
+      <a href="{{ url_for('analytics') }}" class="{{ 'active' if request.endpoint == 'analytics' }}">Analytics</a>
+    {% endif %}
+    {% if role == 'Admin' %}
+      <a href="{{ url_for('admin_organizations') }}" class="{{ 'active' if request.endpoint.startswith('admin') }}">Partners</a>
+      <a href="{{ url_for('admin_users') }}" class="{{ 'active' if request.endpoint == 'admin_users' }}">Users</a>
+      <a href="{{ url_for('admin_vehicles') }}" class="{{ 'active' if request.endpoint == 'admin_vehicles' }}">Vehicles</a>
+      <a href="{{ url_for('admin_categories') }}" class="{{ 'active' if request.endpoint == 'admin_categories' }}">Taxonomy</a>
+      <a href="{{ url_for('audit_log') }}" class="{{ 'active' if request.endpoint == 'audit_log' }}">Audit</a>
+    {% endif %}
+    <a href="{{ url_for('performance') }}" class="{{ 'active' if request.endpoint == 'performance' }}">Performance</a>
+  </nav>
+  <div class="userbox">
+    <span class="role-pill {{ {'Admin':'admin','Donor Staff':'donor','Recipient Coordinator':'coord','Volunteer Courier':'courier'}[role] }}">{{ ROLE_LABELS[role] }}</span>
+    <span class="who">{{ g.user.full_name }}{% if g.user.org_name %} · {{ g.user.org_name }}{% endif %}</span>
+    {% if DEMO_MODE %}
+    <form method="post" action="{{ url_for('switch_role') }}" class="switcher">
+      <select name="email" onchange="this.form.submit()" title="Demo role switcher">
+        <option value="">Switch role…</option>
+        {% for email, label in DEMO_USERS %}
+          <option value="{{ email }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('logout') }}">
+      <button class="ghost small">Sign out</button>
+    </form>
+  </div>
+</header>
+{% endif %}
+
+<main class="wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flashes">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer>RescueLink · DBMS course project · Flask + PostgreSQL · parameterised raw SQL</footer>
+</body>
+</html>

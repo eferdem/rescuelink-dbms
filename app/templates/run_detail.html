@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run.run_id }}{% endblock %}
+{% block content %}
+<div class="split">
+  <div>
+    <h1>Run #{{ run.run_id }} <span class="badge {{ run.status }}">{{ run.status.replace('_', ' ') }}</span></h1>
+    <p class="lede">{{ run.run_date | d }} · {{ run.plate }}{% if run.is_refrigerated %} (refrigerated){% endif %}
+      · lead {{ run.lead_name }}{% if run.lead_org %} ({{ run.lead_org }}){% endif %}</p>
+  </div>
+  <a class="btn ghost" href="{{ url_for('runs') }}">← All runs</a>
+</div>
+
+<div class="grid two">
+  <div class="card table-wrap">
+    <h3>Pickups (run_batches)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Batch</th><th>Item</th><th>Donor</th><th class="num">kg</th><th>Expires</th></tr></thead>
+      <tbody>
+      {% for b in batches %}
+        <tr>
+          <td>{{ b.sequence_no }}</td>
+          <td>#{{ b.batch_id }}</td>
+          <td>{{ b.item_description }}<br><span class="small muted">{{ b.category }}</span></td>
+          <td>{{ b.donor }}</td>
+          <td class="num">{{ b.quantity_kg | kg }}</td>
+          <td class="nowrap">{{ b.expires_at | dt }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">No pickups on this run yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if g.user.role_name != 'Volunteer Courier' and run.status != 'completed' %}
+    <form class="inline mt" method="post" action="{{ url_for('run_add_batch', run_id=run.run_id) }}">
+      <select name="batch_id" required style="max-width:420px;">
+        {% for c in candidates %}
+          <option value="{{ c.batch_id }}">#{{ c.batch_id }} · {{ c.donor_name }} · {{ c.item_description }} ({{ c.remaining_kg | kg }} kg)</option>
+        {% endfor %}
+      </select>
+      <button class="small">Add pickup</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card table-wrap">
+    <h3>Crew (shift_assignments)</h3>
+    <table>
+      <thead><tr><th>Name</th><th>Role</th><th class="num">Hours</th></tr></thead>
+      <tbody>
+      {% for c in crew %}
+        <tr><td>{{ c.full_name }}<br><span class="small muted">{{ c.email }}</span></td>
+            <td class="muted">{{ c.role_on_run }}</td>
+            <td class="num">{{ c.hours_logged | kg }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">No crew assigned.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if g.user.role_name != 'Volunteer Courier' and run.status != 'completed' %}
+    <form class="inline mt" method="post" action="{{ url_for('run_add_crew', run_id=run.run_id) }}">
+      <select name="user_id" required style="max-width:240px;">
+        {% for v in volunteers %}<option value="{{ v.user_id }}">{{ v.full_name }}</option>{% endfor %}
+      </select>
+      <select name="role_on_run" style="width:auto;">
+        <option value="loader">loader</option>
+        <option value="driver">driver</option>
+        <option value="coordinator">coordinator</option>
+      </select>
+      <button class="small">Assign</button>
+    </form>
+
+    <hr style="border:none; border-top:1px solid var(--line); margin:16px 0;">
+    <form class="inline" method="post" action="{{ url_for('run_complete', run_id=run.run_id) }}">
+      <input name="total_km" type="number" step="0.1" min="0" placeholder="total km" style="width:120px;">
+      <button>Mark completed</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if run.notes %}<p class="small muted mt">Notes: {{ run.notes }}</p>{% endif %}
+{% endblock %}

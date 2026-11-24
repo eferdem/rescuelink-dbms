@@ -1,0 +1,57 @@
+# RescueLink -- reproducible stack.
+#
+#   docker compose up -d db          # schema + indexes load on a fresh volume
+#   docker compose run --rm seed     # deterministic 73,645-row seed (once)
+#   docker compose up -d app         # http://127.0.0.1:5000
+#
+# The seed service is behind a profile so `docker compose up` never wipes a
+# database that already contains demo activity.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: rescuelink
+      POSTGRES_USER: rescue_admin
+      POSTGRES_PASSWORD: rescue_dev_pw
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rescue_admin -d rescuelink"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql:ro
+
+  seed:
+    build: .
+    profiles: ["seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: rescue_admin
+      PGPASSWORD: rescue_dev_pw
+      PGDATABASE: rescuelink
+    command: ["python", "sql/03_seed.py"]
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rescue_admin:rescue_dev_pw@db:5432/rescuelink
+      FLASK_HOST: 0.0.0.0
+      FLASK_PORT: "5000"
+      FLASK_DEBUG: "0"
+    ports:
+      - "5000:5000"
+
+volumes:
+  pgdata:
